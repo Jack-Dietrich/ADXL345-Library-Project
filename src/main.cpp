@@ -33,6 +33,64 @@ const int VSPI_SS = 5;
 
 SPIClass vspi = SPIClass(VSPI);
 
+//functions for reading and writing to register
+
+
+/**
+@brief read from a register in the adxl345.
+
+@param reg register you want to read from
+@param numBytes number of bytes you want to read
+@param buff buffer to store the bytes that are being read
+*/
+void readReg(byte reg, int numBytes, byte buff[]){
+  if(numBytes > 1){//if user wants to read more than 1 byte need to enable 
+    reg |= (1 << 6);
+  }
+
+
+  //SET READ 
+  reg |= (1<<7); //set last bit so we read
+
+  digitalWrite(VSPI_SS,LOW);//start transmission
+
+  //send addr
+
+  vspi.transfer(reg);
+
+  for(int i = 0 ; i < numBytes; i++){//for each byte that we want to read
+    buff[i] = vspi.transfer(0x00);//transfer 0 to prompt adxl for new byte of info
+  }
+
+  digitalWrite(VSPI_SS,HIGH); //end transmission
+
+}
+
+void writeReg(byte reg, int numBytes, byte buff[]){
+  if(numBytes > 1){//if user wants to read more than 1 byte need to enable 
+    reg |= (1 << 6);
+  }
+
+  //SET WRITE
+  reg &= ~(1<<7); //set last bit to 0 so we write
+
+
+
+  digitalWrite(VSPI_SS,LOW);//start transmission
+
+  //send reg to adxl
+  vspi.transfer(reg);
+
+
+  for(int i = 0 ; i < numBytes; i++){//for each byte that we want to write
+    vspi.transfer(buff[i]);
+  }
+
+  digitalWrite(VSPI_SS,HIGH); //end transmission
+
+
+}
+
 
 void setup() {
   /*
@@ -43,10 +101,12 @@ void setup() {
   vspi.begin(VSPI_SCLK, VSPI_MISO, VSPI_MOSI, VSPI_SS);
   pinMode(VSPI_SS,OUTPUT);
   digitalWrite(VSPI_SS,HIGH);//slave selct should be active lo, so go high asap
-
   Serial.begin(115200);
-
   vspi.setDataMode(3); //mode 3 as CPOL and CPHA 1.
+  
+  
+  
+  
   digitalWrite(VSPI_SS,LOW);//START transmission
 
   //read from register 31
@@ -54,7 +114,6 @@ void setup() {
 
   byte buff;
 
-  int num = 1;//for testing
   
   buff = vspi.transfer(0x00);//transfer 0 in order to prompt for data?
 
@@ -70,8 +129,11 @@ void setup() {
   digitalWrite(VSPI_SS,HIGH);//end transmission
 }
 
+//after setup, adxl345 should work in 4 wire spi mode
+
+
 void loop() {
-  // put your main code here, to run repeatedly:
+
 }
 
 // put function definitions here:
