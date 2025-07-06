@@ -23,7 +23,7 @@ ch3 - scl
 //defining hspi and vspi
 
 #define VSPI 3
-
+#define DATA_START 0x32
 
 //pin delcarations
 
@@ -97,7 +97,19 @@ void writeReg(byte reg, int numBytes, byte buff[]){
 
 }
 
+void readAccel(int *x, int *y, int *z){
+  byte buff[6]; //6 byte register to hold both x, y, z data (each coordinate has 2 registers)
 
+  readReg(DATA_START,6,buff); //read 6 bytes into our buffer.
+	
+  /*
+  Here we are storing into the respective variables what we have read from the sensor. We are casting to ensure c++ does not choose incorrect data types. Buff[0] will be the first byte of our data, we then or it with the
+  2nd byte stored in buff[1]. This needs to be shifted left 8 bits to align correctly to form the 16 bit value.
+  */
+  *x = (int16_t)((((int)buff[1]) << 8) | buff[0]);
+	*y = (int16_t)((((int)buff[3]) << 8) | buff[2]);
+	*z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
+}
 
 void setup() {
   /*
@@ -106,7 +118,7 @@ void setup() {
   */
 
   
-  Serial.begin(115200);
+  Serial.begin(9600);
   vspi.begin(VSPI_SCLK, VSPI_MISO, VSPI_MOSI, VSPI_SS);
   vspi.setDataMode(3); //mode 3 as CPOL and CPHA 1.
   pinMode(VSPI_SS,OUTPUT);
@@ -141,6 +153,20 @@ void setup() {
 
 
 void loop() {
+
+
+  int x,y,z; //create integers to store the x, y, z data
+
+  readAccel(&x,&y,&z);
+
+
+  
+  
+  Serial.print(x);
+  Serial.print(", ");
+  Serial.print(y);
+  Serial.print(", ");
+  Serial.println(z);
 
 }
 
