@@ -16,10 +16,13 @@ ch3 - scl
 
 */
 
+//initial setup
+
+
+
 //defining hspi and vspi
 
 #define VSPI 3
-#define DATA_START 0x32
 
 
 //pin delcarations
@@ -30,11 +33,14 @@ const int VSPI_SCLK = 18;
 const int VSPI_SS = 5;
 
 
-
+// put function declarations here:
 
 SPIClass vspi = SPIClass(VSPI);
 
-//Function definitions
+
+
+//functions for reading and writing to register
+
 
 /**
 @brief read from a register in the adxl345.
@@ -66,14 +72,6 @@ void readReg(byte reg, int numBytes, byte buff[]){
 
 }
 
-
-/**
-@brief write from a register in the adxl345.
-
-@param reg register you want to write to
-@param numBytes number of bytes you want to write
-@param buff buffer to store the bytes you want to write
-*/
 void writeReg(byte reg, int numBytes, byte buff[]){
   if(numBytes > 1){//if user wants to read more than 1 byte need to enable 
     reg |= (1 << 6);
@@ -99,22 +97,6 @@ void writeReg(byte reg, int numBytes, byte buff[]){
 
 }
 
-void readAccel(int *x, int *y, int *z){
-  byte buff[6]; //6 byte register to hold both x, y, z data (each coordinate has 2 registers)
-
-  readReg(DATA_START,6,buff); //read 6 bytes into our buffer.
-	
-  /*
-  Here we are storing into the respective variables what we have read from the sensor. We are casting to ensure c++ does not choose incorrect data types. Buff[0] will be the first byte of our data, we then or it with the
-  2nd byte stored in buff[1]. This needs to be shifted left 8 bits to align correctly to form the 16 bit value.
-  */
-  *x = (int16_t)((((int)buff[1]) << 8) | buff[0]);
-	*y = (int16_t)((((int)buff[3]) << 8) | buff[2]);
-	*z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
-}
-
-
-
 
 
 void setup() {
@@ -123,12 +105,13 @@ void setup() {
 
   */
 
+  
+  Serial.begin(115200);
   vspi.begin(VSPI_SCLK, VSPI_MISO, VSPI_MOSI, VSPI_SS);
+  vspi.setDataMode(3); //mode 3 as CPOL and CPHA 1.
   pinMode(VSPI_SS,OUTPUT);
   digitalWrite(VSPI_SS,HIGH);//slave selct should be active lo, so go high asap
-  Serial.begin(115200);
-  vspi.setDataMode(3); //mode 3 as CPOL and CPHA 1.
-  
+
   
   
   
@@ -159,43 +142,6 @@ void setup() {
 
 void loop() {
 
-  
-  /*
-  
-
-  int x,y,z; //create integers to store the x, y, z data
-
-  readAccel(&x,&y,&z);
-
-
-  
-  
-  Serial.print(x);
-  Serial.print(", ");
-  Serial.print(y);
-  Serial.print(", ");
-  Serial.println(z);
-
-
-  
-  
-  */
-
-
-
-  
-
-
-  
-
-  /*
-  
-  TODO: want to read from x,y,z axis. Each have 2 regs each, consecutively
-  
-  
-  */
-
-
-
-
 }
+
+// put function definitions here:
