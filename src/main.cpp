@@ -24,6 +24,8 @@ ch3 - scl
 
 #define VSPI 3
 #define DATA_START 0x32
+#define ADXL345_POWER_CTL 0x2D
+
 
 //pin delcarations
 
@@ -72,13 +74,11 @@ void readReg(byte reg, int numBytes, byte buff[]){
 
 }
 
-void writeReg(byte reg, int numBytes, byte buff[]){
-  if(numBytes > 1){//if user wants to read more than 1 byte need to enable 
-    reg |= (1 << 6);
-  }
+void writeReg(byte reg, byte buff){
+
 
   //SET WRITE
-  reg &= ~(1<<7); //set last bit to 0 so we write
+  //reg &= ~(1<<7); //set last bit to 0 so we write(not needed)
 
 
 
@@ -88,9 +88,7 @@ void writeReg(byte reg, int numBytes, byte buff[]){
   vspi.transfer(reg);
 
 
-  for(int i = 0 ; i < numBytes; i++){//for each byte that we want to write
-    vspi.transfer(buff[i]);
-  }
+  vspi.transfer(buff);
 
   digitalWrite(VSPI_SS,HIGH); //end transmission
 
@@ -111,6 +109,13 @@ void readAccel(int *x, int *y, int *z){
 	*z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
 }
 
+void on(){
+
+  writeReg(ADXL345_POWER_CTL,0); //WAKE
+  writeReg(ADXL345_POWER_CTL,16); //Auto sleep
+  writeReg(ADXL345_POWER_CTL,8);  //Mesure
+}
+
 void setup() {
   /*
   Notes:
@@ -124,29 +129,23 @@ void setup() {
   pinMode(VSPI_SS,OUTPUT);
   digitalWrite(VSPI_SS,HIGH);//slave selct should be active lo, so go high asap
 
+  //the delay is not needed
   
+  on();
   
-  
-  digitalWrite(VSPI_SS,LOW);//START transmission
+
+  //set spi bit section
+  byte buff[1];
 
   //read from register 31
-  vspi.transfer(0xB1);//read register 31(MSB is a 1)
-
-  byte buff;
-
-  
-  buff = vspi.transfer(0x00);//transfer 0 in order to prompt for data?
+  readReg(0x31,1,buff);
 
 
-
-
-
-  //manipulate to clear bit d6(xor with 1 in bit d6)
-  buff ^= (1 << 6);
+  //manipulate to clear bit d6(xor with 1 in bit d6)(we want 4 wire spi, so should clear bit)
+  buff[0] &= ~(1 << 6);
   //write back to register 0x31
-  vspi.transfer(buff); //want to clear bit in DATA_FORMAT register in order to select 4 wire SPI, first 2 bits can be 0 as writing only one byte
+  writeReg(0x31,buff[0]);
 
-  digitalWrite(VSPI_SS,HIGH);//end transmission
 }
 
 //after setup, adxl345 should work in 4 wire spi mode
