@@ -26,6 +26,38 @@ ch3 - scl
 #define DATA_START 0x32
 #define ADXL345_POWER_CTL 0x2D
 
+//definitions for registers
+
+#define ADXL345_DEVID 0x00
+#define ADXL345_THRESH_TAP 0x1D
+#define ADXL345_OFSX 0x1E
+#define ADXL345_OFSY 0x1F
+#define ADXL345_OFSZ 0x20
+#define ADXL345_DUR 0x21
+#define ADXL345_LATENT 0x22
+#define ADXL345_WINDOW 0x23
+#define ADXL345_THRESH_ACT 0x24
+#define ADXL345_THRESH_INACT 0x25
+#define ADXL345_TIME_INACT 0x26
+#define ADXL345_ACT_INACT_CTL 0x27
+#define ADXL345_THRESH_FF 0x28
+#define ADXL345_TIME_FF 0x29
+#define ADXL345_TAP_AXES 0x2A
+#define ADXL345_ACT_TAP_STATUS 0x2B
+#define ADXL345_BW_RATE 0x2C
+#define ADXL345_POWER_CTL 0x2D
+#define ADXL345_INT_ENABLE 0x2E
+#define ADXL345_INT_MAP 0x2F
+#define ADXL345_INT_SOURCE 0x30
+#define ADXL345_DATA_FORMAT 0x31
+#define ADXL345_DATAX0 0x32
+#define ADXL345_DATAX1 0x33
+#define ADXL345_DATAY0 0x34
+#define ADXL345_DATAY1 0x35
+#define ADXL345_DATAZ0 0x36
+#define ADXL345_DATAZ1 0x37
+#define ADXL345_FIFO_CTL 0x38
+#define ADXL345_FIFO_STATUS 0x39
 
 //pin delcarations
 
@@ -76,12 +108,6 @@ void readReg(byte reg, int numBytes, byte buff[]){
 
 void writeReg(byte reg, byte buff){
 
-
-  //SET WRITE
-  //reg &= ~(1<<7); //set last bit to 0 so we write(not needed)
-
-
-
   digitalWrite(VSPI_SS,LOW);//start transmission
 
   //send reg to adxl
@@ -112,8 +138,103 @@ void readAccel(int *x, int *y, int *z){
 void on(){
 
   writeReg(ADXL345_POWER_CTL,0); //WAKE
-  writeReg(ADXL345_POWER_CTL,16); //Auto sleep
+  writeReg(ADXL345_POWER_CTL,16); //Auto sleep(BIT D4)
   writeReg(ADXL345_POWER_CTL,8);  //Mesure
+}
+
+void setSPI(){
+
+  //TODO: test this with setClearBit function
+
+  //set spi bit section
+  byte buff[1];
+
+  //read from register 31
+  readReg(0x31,1,buff);
+
+
+  //manipulate to clear bit d6(xor with 1 in bit d6)(we want 4 wire spi, so should clear bit)
+  buff[0] &= ~(1 << 6);
+  //write back to register 0x31
+  writeReg(0x31,buff[0]);
+
+}
+
+
+
+
+/**
+@brief set or clear a bit in the register
+
+@param reg register you want set or clear a bit in
+@param bitNum bit to clear(indexing starts at 0)
+@param setClear 1 if you want to set the bit, 0 if you want to clear the bit
+*/
+void setClearBit(byte reg, int bitNum,int setClear){
+
+  byte buff[1];
+
+  //read whats already in the register
+  readReg(reg,1,buff);
+
+  if(setClear){//we want to set bit
+    Serial.println("Setting bit");
+
+    buff[0] |= (1 << bitNum); //or with bit shifted (this was toggling before)
+
+  }else{//we want to clear bit
+    Serial.println("Clearing bit");
+
+    buff[0] &= ~(1 << bitNum);
+
+  }
+
+  writeReg(reg,buff[0]); //write back the modified contents
+
+
+}
+
+/**
+@brief sets range of the adxl345 from 2g to 16g
+
+@param gRange either 2,4,8,16 for the g range
+
+*/
+void setRange(int gRange){
+  //setting range from +-2g to +- 16g
+
+  switch(gRange){
+    case 2:
+      Serial.println("Setting g range: 2g");
+      setClearBit(ADXL345_DATA_FORMAT,0,0);
+      setClearBit(ADXL345_DATA_FORMAT,1,0);
+    break;
+    
+
+    case 4:
+      Serial.println("Setting g range: 4g");
+      setClearBit(ADXL345_DATA_FORMAT,0,1);
+      setClearBit(ADXL345_DATA_FORMAT,1,0);
+    break;
+
+
+    case 8:
+      Serial.println("Setting g range: 8g");
+
+      setClearBit(ADXL345_DATA_FORMAT,0,0);
+      setClearBit(ADXL345_DATA_FORMAT,1,1);
+    break;
+
+
+    case 16:
+      Serial.println("Setting g range: 16g"); //this is clearing it by accident
+      setClearBit(ADXL345_DATA_FORMAT,0,1);
+      setClearBit(ADXL345_DATA_FORMAT,1,1);
+    break;
+
+  }
+
+
 }
 
 void setup() {
@@ -133,18 +254,10 @@ void setup() {
   
   on();
   
+  setSPI();
 
-  //set spi bit section
-  byte buff[1];
-
-  //read from register 31
-  readReg(0x31,1,buff);
-
-
-  //manipulate to clear bit d6(xor with 1 in bit d6)(we want 4 wire spi, so should clear bit)
-  buff[0] &= ~(1 << 6);
-  //write back to register 0x31
-  writeReg(0x31,buff[0]);
+  setRange(2);
+  
 
 }
 
