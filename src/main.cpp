@@ -7,6 +7,8 @@ MOSI: 23
 MISO: 19
 SCK: 18
 SS:5
+Interrupt pin for tap detection: D4(GPIO 4)
+Touch led on D2
 
 --Logic Analyzer channel info--
 ch0 - SS
@@ -308,6 +310,16 @@ void setRate(int rate){
 
   writeReg(ADXL345_BW_RATE,buff);
 }
+
+
+void TOUCH_ISR(){
+  Serial.println("IN ISR");
+  digitalWrite(2,HIGH);//turn LED on
+  delay(200);
+  digitalWrite(2,LOW);//LED off
+}
+
+
 void setup() {
   /*
   Notes:
@@ -321,15 +333,51 @@ void setup() {
   pinMode(VSPI_SS,OUTPUT);
   digitalWrite(VSPI_SS,HIGH);//slave selct should be active lo, so go high asap
 
-  //the delay is not needed
+  //interrupt setup
+  pinMode(4,INPUT); //set INT1 AS INTERRUPT
+  pinMode(2,OUTPUT);//led for interrupt
+
+  attachInterrupt(4,TOUCH_ISR,FALLING);//pin will go from high to low as per datasheet
+
+  /*
+  Notes
+  -Thresh tap precision is 62.5mg/lsb
+
+  */
+
+  //end of interrupt setup
+
+  //set thresh tap register, duration register
+
+
+
   
   on();
   
   setSPI();
 
-  setRange(2);
+  setRange(16);//set to 16g's
 
   setRate(100);
+
+  //interrupts setup
+  writeReg( ADXL345_INT_MAP, 0); // send all interrupts to ADXL345's INT1 pin
+
+
+
+  //threshtap
+  writeReg(ADXL345_THRESH_TAP,48);//this is just a test value, need to figure out an actual value of a tap (need accuracy of the data register measurements)
+
+  //tap duration
+  writeReg(ADXL345_DUR,0x1F);
+
+  //tap axis enable
+  writeReg(ADXL345_TAP_AXES,0xE0);//enable tap detection on all axis for now. This should be reversed maybe(E0)
+
+  //TODO implement tap detection with interrupts
+  //by default the interrupt register is set to all zeros so all interrupts will be sent to int1 pin.
+
+  //set 
   
 
 }
@@ -344,14 +392,16 @@ void loop() {
 
   readAccel(&x,&y,&z);
 
+  byte tapActivity;
+
+  readReg(ADXL345_ACT_TAP_STATUS,1,&tapActivity);
+
+  if(tapActivity){
+    Serial.println("Tap!!!");
+  }
   
   
-  
-  Serial.print(x);
-  Serial.print(", ");
-  Serial.print(y);
-  Serial.print(", ");
-  Serial.println(z);
+
 
 }
 
