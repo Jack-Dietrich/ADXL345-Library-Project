@@ -106,6 +106,13 @@ void readReg(byte reg, int numBytes, byte buff[]){
 
 }
 
+/**
+@brief write to a register
+
+@param reg the reg you want to write to
+@param buff a byte of data you would like to write to reg
+
+*/
 void writeReg(byte reg, byte buff){
 
   digitalWrite(VSPI_SS,LOW);//start transmission
@@ -121,6 +128,13 @@ void writeReg(byte reg, byte buff){
 
 }
 
+
+/**
+@brief read acceleration data from registers
+
+@param x,y,z register you want to store x, y, z data in respectively
+
+*/
 void readAccel(int *x, int *y, int *z){
   byte buff[6]; //6 byte register to hold both x, y, z data (each coordinate has 2 registers)
 
@@ -227,16 +241,73 @@ void setRange(int gRange){
 
 
     case 16:
-      Serial.println("Setting g range: 16g"); //this is clearing it by accident
+      Serial.println("Setting g range: 16g"); 
       setClearBit(ADXL345_DATA_FORMAT,0,1);
       setClearBit(ADXL345_DATA_FORMAT,1,1);
     break;
 
+    default:
+      //set range to 16g if not specified
+      Serial.println("Setting g range: 16g");
+      setClearBit(ADXL345_DATA_FORMAT,0,1);
+      setClearBit(ADXL345_DATA_FORMAT,1,1);
   }
 
 
 }
 
+
+void setRate(int rate){
+  byte buff;
+
+  switch (rate)
+  {
+  case 3200:
+  //write to 0x2c the corrisponding code
+  buff = 0b1111;
+  break;
+  
+  
+  
+  case 1600:
+  buff = 0b1110;
+  
+  break;
+
+  case 800:
+  buff = 0b1101;
+  break;
+
+  case 400:
+  buff = 0b1100;
+
+  break;
+
+
+  case 200:
+  buff = 0b1011;
+  break;
+  
+  case 100:
+  buff = 0b1011;
+  break;
+    
+  case 25:
+  buff = 0b1000;
+  break;
+
+  case 0:
+  buff = 0b0011;
+  break;
+
+  default:
+    //DEFAULT is case 100 as per datasheet
+    break;
+
+  }
+
+  writeReg(ADXL345_BW_RATE,buff);
+}
 void setup() {
   /*
   Notes:
@@ -244,7 +315,7 @@ void setup() {
   */
 
   
-  Serial.begin(9600);
+  Serial.begin(115200);
   vspi.begin(VSPI_SCLK, VSPI_MISO, VSPI_MOSI, VSPI_SS);
   vspi.setDataMode(3); //mode 3 as CPOL and CPHA 1.
   pinMode(VSPI_SS,OUTPUT);
@@ -257,6 +328,8 @@ void setup() {
   setSPI();
 
   setRange(2);
+
+  setRate(100);
   
 
 }
@@ -271,7 +344,7 @@ void loop() {
 
   readAccel(&x,&y,&z);
 
-
+  
   
   
   Serial.print(x);
@@ -282,4 +355,10 @@ void loop() {
 
 }
 
-// put function definitions here:
+/*
+Notes
+-2g range means max value on any axis is 2g = 512
+
+
+
+*/
