@@ -15,7 +15,6 @@ ch0 - SS
 ch1 -miso/sdo
 ch2 - mosi/sda
 ch3 - scl
-
 */
 
 //initial setup
@@ -73,6 +72,14 @@ const int VSPI_SS = 5;
 int blink = 0;
 
 
+/* FreeRTOS config*/
+
+static SemaphoreHandle_t mutex; //for the mutex when doing spi communication
+
+
+///
+
+
 SPIClass vspi = SPIClass(VSPI);
 
 
@@ -89,6 +96,9 @@ SPIClass vspi = SPIClass(VSPI);
 @param buff buffer to store the bytes that are being read
 */
 void readReg(byte reg, int numBytes, byte buff[]){
+  
+
+
   if(numBytes > 1){//if user wants to read more than 1 byte need to enable 
     reg |= (1 << 6);
   }
@@ -96,6 +106,8 @@ void readReg(byte reg, int numBytes, byte buff[]){
 
   //SET READ 
   reg |= (1<<7); //set last bit so we read
+
+  xSemaphoreTake(mutex,0);//take mutex, don't block
 
   digitalWrite(VSPI_SS,LOW);//start transmission
 
@@ -107,7 +119,12 @@ void readReg(byte reg, int numBytes, byte buff[]){
     buff[i] = vspi.transfer(0x00);//transfer 0 to prompt adxl for new byte of info
   }
 
+
   digitalWrite(VSPI_SS,HIGH); //end transmission
+
+  xSemaphoreGive(mutex);
+
+
 
 }
 
@@ -120,6 +137,9 @@ void readReg(byte reg, int numBytes, byte buff[]){
 */
 void writeReg(byte reg, byte buff){
 
+  xSemaphoreTake(mutex,0); //take mutex(trying not to block)
+
+
   digitalWrite(VSPI_SS,LOW);//start transmission
 
   //send reg to adxl
@@ -130,6 +150,7 @@ void writeReg(byte reg, byte buff){
 
   digitalWrite(VSPI_SS,HIGH); //end transmission
 
+  xSemaphoreGive(mutex);
 
 }
 
@@ -310,16 +331,18 @@ void setRate(int rate){
     break;
 
   }
-
+  xSemaphoreTake(mutex,0);//take mutex
   writeReg(ADXL345_BW_RATE,buff);
+  xSemaphoreGive(mutex);//give it back
 }
 
 
 void TOUCH_ISR(){
+  Serial.println("IN ISR");
 
-  //this may be interrupted by other processes?(if in freeRTOS)
+  //this may be interrupted by other processes(if in freeRTOS)
   blink = 1;
-  //Serial.println("IN ISR");
+  //need to clear interrupts, not sure if this should be done in this isr or later  
 
 }
 
@@ -332,6 +355,9 @@ void setup() {
 
   
   Serial.begin(115200);
+
+  vTaskDelay(1000 /portTICK_PERIOD_MS);//wait 1 second
+
   vspi.begin(VSPI_SCLK, VSPI_MISO, VSPI_MOSI, VSPI_SS);
   vspi.setDataMode(3); //mode 3 as CPOL and CPHA 1.
   pinMode(VSPI_SS,OUTPUT);
@@ -341,10 +367,6 @@ void setup() {
   pinMode(4,INPUT); //set INT1 AS INTERRUPT
   pinMode(LED,OUTPUT);//led for interrupt
 
-  //test led 
-  digitalWrite(LED,HIGH);
-  delay(2000);
-  digitalWrite(LED,LOW);
 
   attachInterrupt(4,TOUCH_ISR,FALLING);//pin will go from high to low as per datasheet
 
@@ -359,7 +381,7 @@ void setup() {
   //set thresh tap register, duration register
 
 
-
+  mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
   
   on();
   
@@ -409,11 +431,10 @@ void loop() {
 
   //readAccel(&x,&y,&z);
 
-  
-  
   byte tapActivity;
 
   readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
+  //this should be read at the beginning to reset any tap activity, then at the end of isr to reset
 
 
   if(tapActivity){
@@ -430,19 +451,13 @@ void loop() {
   delay(100);//give more time to read in logic analyzer
 
   
-  
-
-
-  
-  
-
 
 }
 
 /*
 Notes
 -2g range means max value on any axis is 2g = 512
-
+-reading int source, clears the interrupts.
 
 
 */
