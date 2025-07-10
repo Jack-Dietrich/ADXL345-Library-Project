@@ -27,6 +27,7 @@ ch3 - scl
 #define VSPI 3
 #define DATA_START 0x32
 #define ADXL345_POWER_CTL 0x2D
+#define LED 15 //define as pin 15 for now
 
 //definitions for registers
 
@@ -68,10 +69,12 @@ const int VSPI_MOSI = 23;
 const int VSPI_SCLK = 18;
 const int VSPI_SS = 5;
 
+//global variable(testing)
+int blink = 0;
 
-// put function declarations here:
 
 SPIClass vspi = SPIClass(VSPI);
+
 
 
 
@@ -313,10 +316,11 @@ void setRate(int rate){
 
 
 void TOUCH_ISR(){
-  Serial.println("IN ISR");
-  digitalWrite(2,HIGH);//turn LED on
-  delay(200);
-  digitalWrite(2,LOW);//LED off
+
+  //this may be interrupted by other processes?(if in freeRTOS)
+  blink = 1;
+  //Serial.println("IN ISR");
+
 }
 
 
@@ -335,7 +339,12 @@ void setup() {
 
   //interrupt setup
   pinMode(4,INPUT); //set INT1 AS INTERRUPT
-  pinMode(2,OUTPUT);//led for interrupt
+  pinMode(LED,OUTPUT);//led for interrupt
+
+  //test led 
+  digitalWrite(LED,HIGH);
+  delay(2000);
+  digitalWrite(LED,LOW);
 
   attachInterrupt(4,TOUCH_ISR,FALLING);//pin will go from high to low as per datasheet
 
@@ -372,7 +381,15 @@ void setup() {
   writeReg(ADXL345_DUR,0x1F);
 
   //tap axis enable
-  writeReg(ADXL345_TAP_AXES,0xE0);//enable tap detection on all axis for now. This should be reversed maybe(E0)
+  writeReg(ADXL345_TAP_AXES,0x1);//only enable z tap detection
+
+  //want to read tap axis to make sure we set it correctly
+
+  //ENABLE INTERRUPTS
+  setClearBit(ADXL345_INT_ENABLE,6,1);//set bit 6 to a 1 to enable interrupt for single tap
+
+  byte buff;
+  readReg(ADXL345_TAP_AXES,1,&buff);
 
   //TODO implement tap detection with interrupts
   //by default the interrupt register is set to all zeros so all interrupts will be sent to int1 pin.
@@ -390,15 +407,32 @@ void loop() {
 
   int x,y,z; //create integers to store the x, y, z data
 
-  readAccel(&x,&y,&z);
+  //readAccel(&x,&y,&z);
 
+  
+  
   byte tapActivity;
 
-  readReg(ADXL345_ACT_TAP_STATUS,1,&tapActivity);
+  readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
+
 
   if(tapActivity){
     Serial.println("Tap!!!");
   }
+  
+  if(blink){
+    digitalWrite(LED,HIGH);//turn LED on
+    delay(1000);//keep on for 1 second
+    digitalWrite(LED,LOW);//LED off
+    blink = 0;//reset blink
+  }
+
+  delay(100);//give more time to read in logic analyzer
+
+  
+  
+
+
   
   
 
