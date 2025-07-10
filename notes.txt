@@ -1,4 +1,4 @@
-Wednesday June 2
+Wednesday July 2
 -----
 -Unsure how to set DATA_FORMAT register values to select 3 or 4 wire SPI when to do that I need to use SPI to communicate??
 -Sampling rate for logic analyzer must be 24Mhz to have a high enough sample rate to capture SPI default speed.
@@ -8,7 +8,7 @@ TODO
 -Want to read DATA_FORMAT register then clear bit D6 to set 4 wire SPI communication.
 
 
-Thurs Jun 3
+Thurs July 3
 -----------
 -Need to write to the device in order to trigger it to send back info.
 1st bit is write/read write is 0, read is 1?
@@ -16,3 +16,7 @@ Thurs Jun 3
 
 -Need to write to the device in order to trigger it to send back info.
   
+
+Thurs July 4
+------------
+-Added freertos queue in order to reduce time in ISR.

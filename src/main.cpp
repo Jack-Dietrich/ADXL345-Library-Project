@@ -74,10 +74,18 @@ int blink = 0;
 
 /* FreeRTOS config*/
 
+//mutex
 static SemaphoreHandle_t mutex; //for the mutex when doing spi communication
+
+//queue
+static QueueHandle_t ledQueue;//queue to store led blink requests
 
 
 ///
+
+typedef struct ledMsg {
+  int test;
+};
 
 
 SPIClass vspi = SPIClass(VSPI);
@@ -342,10 +350,24 @@ void TOUCH_ISR(){
 
   //this may be interrupted by other processes(if in freeRTOS)
   blink = 1;
+
+  ledMsg a;
+
+  a.test=1;
+  
+  xQueueSendFromISR(ledQueue,&a,NULL);
+
+
   //need to clear interrupts, not sure if this should be done in this isr or later  
 
 }
 
+
+ void toggleLED(){
+    digitalWrite(LED,HIGH);//turn LED on
+    delay(1000);//keep on for 1 second
+    digitalWrite(LED,LOW);//LED off
+}
 
 void setup() {
   /*
@@ -380,9 +402,16 @@ void setup() {
 
   //set thresh tap register, duration register
 
-
+  /*FreeRTOS setup*/
   mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
+  ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
+ 
+
+
   
+
+
+  //setup of adxl345
   on();
   
   setSPI();
@@ -436,11 +465,12 @@ void loop() {
   readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
   //this should be read at the beginning to reset any tap activity, then at the end of isr to reset
 
-
-  if(tapActivity){
-    Serial.println("Tap!!!");
+  ledMsg buff;//create buffer to read into for receiving
+  if(xQueueReceive(ledQueue,&buff,0) == pdTRUE){//if we get something in the queue
+    toggleLED();
   }
   
+
   if(blink){
     digitalWrite(LED,HIGH);//turn LED on
     delay(1000);//keep on for 1 second
