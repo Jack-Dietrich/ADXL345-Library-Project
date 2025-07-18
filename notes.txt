@@ -20,3 +20,9 @@ Thurs July 3
 Thurs July 4
 ------------
 -Added freertos queue in order to reduce time in ISR.
+
+
+Fri July 18 - implementing google test
+------------
+-Need to select compiler before platformIO loads, else we get an error not being a ble to find project name
+-added errors.h for defining some errors

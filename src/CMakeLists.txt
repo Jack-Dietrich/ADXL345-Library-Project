@@ -1,0 +1,1 @@
+add_library(adxl345 main.cpp)
