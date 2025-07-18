@@ -355,7 +355,7 @@ void TOUCH_ISR(){
 
   a.test=1;
   
-  xQueueSendFromISR(ledQueue,&a,NULL);
+  xQueueSendFromISR(ledQueue,&a,NULL);//send a led blink event to the queue
 
 
   //need to clear interrupts, not sure if this should be done in this isr or later  
