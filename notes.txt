@@ -20,3 +20,7 @@ Thurs July 3
 Thurs July 4
 ------------
 -Added freertos queue in order to reduce time in ISR.
+
+Fri July 25
+-----------
+-Turning readAccel and Serial output into freertos tasks.

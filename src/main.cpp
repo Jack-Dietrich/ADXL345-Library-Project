@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h> //for SPI to ADXL345
+#include "errors.h"
+
 
 /*
 Pins on ESP32 Devkit V1
@@ -17,79 +19,14 @@ ch2 - mosi/sda
 ch3 - scl
 */
 
-//initial setup
 
+//Task handles
+static TaskHandle_t readAccel = NULL;//create task for reading from adxl345
+static TaskHandle_t writeSerial = NULL; //writing to serial
 
-
-//defining hspi and vspi
-
-#define VSPI 3
-#define DATA_START 0x32
-#define ADXL345_POWER_CTL 0x2D
-#define LED 15 //define as pin 15 for now
-
-//definitions for registers
-
-#define ADXL345_DEVID 0x00
-#define ADXL345_THRESH_TAP 0x1D
-#define ADXL345_OFSX 0x1E
-#define ADXL345_OFSY 0x1F
-#define ADXL345_OFSZ 0x20
-#define ADXL345_DUR 0x21
-#define ADXL345_LATENT 0x22
-#define ADXL345_WINDOW 0x23
-#define ADXL345_THRESH_ACT 0x24
-#define ADXL345_THRESH_INACT 0x25
-#define ADXL345_TIME_INACT 0x26
-#define ADXL345_ACT_INACT_CTL 0x27
-#define ADXL345_THRESH_FF 0x28
-#define ADXL345_TIME_FF 0x29
-#define ADXL345_TAP_AXES 0x2A
-#define ADXL345_ACT_TAP_STATUS 0x2B
-#define ADXL345_BW_RATE 0x2C
-#define ADXL345_POWER_CTL 0x2D
-#define ADXL345_INT_ENABLE 0x2E
-#define ADXL345_INT_MAP 0x2F
-#define ADXL345_INT_SOURCE 0x30
-#define ADXL345_DATA_FORMAT 0x31
-#define ADXL345_DATAX0 0x32
-#define ADXL345_DATAX1 0x33
-#define ADXL345_DATAY0 0x34
-#define ADXL345_DATAY1 0x35
-#define ADXL345_DATAZ0 0x36
-#define ADXL345_DATAZ1 0x37
-#define ADXL345_FIFO_CTL 0x38
-#define ADXL345_FIFO_STATUS 0x39
-
-//pin delcarations
-
-const int VSPI_MISO = 19;
-const int VSPI_MOSI = 23;
-const int VSPI_SCLK = 18;
-const int VSPI_SS = 5;
-
-//global variable(testing)
-int blink = 0;
-
-
-/* FreeRTOS config*/
-
-//mutex
-static SemaphoreHandle_t mutex; //for the mutex when doing spi communication
-
-//queue
-static QueueHandle_t ledQueue;//queue to store led blink requests
-
-
-///
-
-typedef struct ledMsg {
-  int test;
-};
-
-
-SPIClass vspi = SPIClass(VSPI);
-
+//Task notification handles
+static TaskHandle_t xTaskToNotify = NULL;
+const UBaseType_t xArrayIndex = 1; //where to store within task notification array
 
 
 
@@ -103,9 +40,11 @@ SPIClass vspi = SPIClass(VSPI);
 @param numBytes number of bytes you want to read
 @param buff buffer to store the bytes that are being read
 */
-void readReg(byte reg, int numBytes, byte buff[]){
+ error_code_t readReg(byte reg, int numBytes, byte buff[]){
   
-
+  if(buff == NULL || reg == NULL || numBytes == 0){ //if we are given a null buffer/register to read from
+    return ERR_CODE_INVALID_ARG;
+  }
 
   if(numBytes > 1){//if user wants to read more than 1 byte need to enable 
     reg |= (1 << 6);
@@ -132,6 +71,8 @@ void readReg(byte reg, int numBytes, byte buff[]){
 
   xSemaphoreGive(mutex);
 
+  return ERR_CODE_SUCCESS;//return for no error
+
 
 
 }
@@ -141,9 +82,8 @@ void readReg(byte reg, int numBytes, byte buff[]){
 
 @param reg the reg you want to write to
 @param buff a byte of data you would like to write to reg
-
 */
-void writeReg(byte reg, byte buff){
+error_code_t writeReg(byte reg, byte buff){
 
   xSemaphoreTake(mutex,0); //take mutex(trying not to block)
 
@@ -160,6 +100,8 @@ void writeReg(byte reg, byte buff){
 
   xSemaphoreGive(mutex);
 
+  return ERR_CODE_SUCCESS;
+
 }
 
 
@@ -169,7 +111,10 @@ void writeReg(byte reg, byte buff){
 @param x,y,z register you want to store x, y, z data in respectively
 
 */
-void readAccel(int *x, int *y, int *z){
+void readAccel(void * parameter){
+
+  int x,y,z = INT_MAX; //initialize the x,y,z variables as max to detect if we're not reading correctly
+
   byte buff[6]; //6 byte register to hold both x, y, z data (each coordinate has 2 registers)
 
   readReg(DATA_START,6,buff); //read 6 bytes into our buffer.
@@ -178,11 +123,18 @@ void readAccel(int *x, int *y, int *z){
   Here we are storing into the respective variables what we have read from the sensor. We are casting to ensure c++ does not choose incorrect data types. Buff[0] will be the first byte of our data, we then or it with the
   2nd byte stored in buff[1]. This needs to be shifted left 8 bits to align correctly to form the 16 bit value.
   */
-  *x = (int16_t)((((int)buff[1]) << 8) | buff[0]);
-	*y = (int16_t)((((int)buff[3]) << 8) | buff[2]);
-	*z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
+  x = (int16_t)((((int)buff[1]) << 8) | buff[0]);
+	y = (int16_t)((((int)buff[3]) << 8) | buff[2]);
+	z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
+
 }
 
+/**
+@brief on configures the wake,auto sleep, and measurement functionality of the adxl345.
+Most importantly the wake ensures that we are able to read data out of it. Without this, we could send commands
+but will not recieve data back.
+
+*/
 void on(){
 
   writeReg(ADXL345_POWER_CTL,0); //WAKE
@@ -190,7 +142,12 @@ void on(){
   writeReg(ADXL345_POWER_CTL,8);  //Mesure
 }
 
-void setSPI(){
+
+/**
+@brief sets adxl345 to use SPI 4 wire instead of i2c.
+
+*/
+error_code_t setSPI(){
 
   //TODO: test this with setClearBit function
 
@@ -206,6 +163,8 @@ void setSPI(){
   //write back to register 0x31
   writeReg(0x31,buff[0]);
 
+  return ERR_CODE_SUCCESS;
+
 }
 
 
@@ -218,7 +177,7 @@ void setSPI(){
 @param bitNum bit to clear(indexing starts at 0)
 @param setClear 1 if you want to set the bit, 0 if you want to clear the bit
 */
-void setClearBit(byte reg, int bitNum,int setClear){
+error_code_t setClearBit(byte reg, int bitNum,int setClear){
 
   byte buff[1];
 
@@ -239,6 +198,7 @@ void setClearBit(byte reg, int bitNum,int setClear){
 
   writeReg(reg,buff[0]); //write back the modified contents
 
+  return ERR_CODE_SUCCESS;
 
 }
 
@@ -290,7 +250,12 @@ void setRange(int gRange){
 
 }
 
+/**
+@brief sets rate of the adxl345 data transmission
 
+@param rate desired speed (see datasheet)
+
+*/
 void setRate(int rate){
   byte buff;
 
@@ -344,22 +309,22 @@ void setRate(int rate){
   xSemaphoreGive(mutex);//give it back
 }
 
+/**
+@brief Interrupt service routine when the sensor has been tapped
 
+*/
 void TOUCH_ISR(){
   Serial.println("IN ISR");
 
-  //this may be interrupted by other processes(if in freeRTOS)
-  blink = 1;
 
   ledMsg a;
 
   a.test=1;
   
-  xQueueSendFromISR(ledQueue,&a,NULL);
+  xQueueSendFromISR(ledQueue,&a,NULL);//send a led blink event to the queue
 
 
-  //need to clear interrupts, not sure if this should be done in this isr or later  
-
+  //clearing interrupts is done through the main loop
 }
 
 
@@ -406,7 +371,19 @@ void setup() {
   mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
   ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
  
+  //FreeRTOS tasks setup
 
+  //readAccel task
+  xTaskCreate(readAccel,//Function name
+    "Read Accel", //pcName
+    1024, //stack size
+    NULL, //currently not passing in any params
+    1, //top priority
+    NULL 
+  );
+
+  //Serial task
+  
 
   
 
@@ -471,12 +448,6 @@ void loop() {
   }
   
 
-  if(blink){
-    digitalWrite(LED,HIGH);//turn LED on
-    delay(1000);//keep on for 1 second
-    digitalWrite(LED,LOW);//LED off
-    blink = 0;//reset blink
-  }
 
   delay(100);//give more time to read in logic analyzer
 
