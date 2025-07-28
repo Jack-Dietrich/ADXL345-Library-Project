@@ -99,14 +99,21 @@ static SemaphoreHandle_t mutex; //for the mutex when doing spi communication
 
 //queue
 static QueueHandle_t ledQueue;//queue to store led blink requests
+static QueueHandle_t accelQueue;//queue for acceleration messages
 
 
-///
 
 typedef struct ledMsg {
   int test;
 };
 
+
+//structure for passing acceleration after it's been read to the serial send task
+typedef struct accelMsg{
+  int x;
+  int y;
+  int z;
+};
 
 SPIClass vspi = SPIClass(VSPI);
 

@@ -20,13 +20,11 @@ ch3 - scl
 */
 
 
-//Task handles
-static TaskHandle_t readAccel = NULL;//create task for reading from adxl345
-static TaskHandle_t writeSerial = NULL; //writing to serial
 
-//Task notification handles
-static TaskHandle_t xTaskToNotify = NULL;
-const UBaseType_t xArrayIndex = 1; //where to store within task notification array
+
+
+//queues
+
 
 
 
@@ -42,7 +40,7 @@ const UBaseType_t xArrayIndex = 1; //where to store within task notification arr
 */
  error_code_t readReg(byte reg, int numBytes, byte buff[]){
   
-  if(buff == NULL || reg == NULL || numBytes == 0){ //if we are given a null buffer/register to read from
+  if((buff == NULL) || (reg == NULL) || (numBytes == 0)){ //if we are given a null buffer/register to read from
     return ERR_CODE_INVALID_ARG;
   }
 
@@ -104,6 +102,7 @@ error_code_t writeReg(byte reg, byte buff){
 
 }
 
+//FREERTOS TASKS
 
 /**
 @brief read acceleration data from registers
@@ -128,6 +127,47 @@ void readAccel(void * parameter){
 	z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
 
 }
+
+
+/**
+@brief Send data to the serial port.
+
+*/
+void sendSerial(void * parameter){
+  accelMsg msg; //create accel message
+  if(xQueueReceive(accelQueue,&msg,0) == pdTRUE){//if we can recive something into the queue
+    Serial.print(msg.x + ",");
+    Serial.print(msg.y + ",");
+    Serial.print(msg.z);
+    Serial.println();
+  } 
+}
+
+
+
+void interruptLed(void * parameter){
+
+  int x,y,z; //create integers to store the x, y, z data
+
+  byte tapActivity;
+
+  readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
+  //this should be read at the beginning to reset any tap activity, then at the end of isr to reset
+
+  ledMsg buff;//create buffer to read into for receiving
+  if(xQueueReceive(ledQueue,&buff,0) == pdTRUE){//if we get something in the queue
+    digitalWrite(LED,HIGH);//turn LED on
+    delay(1000);//keep on for 1 second
+    digitalWrite(LED,LOW);//LED off
+  }
+  
+
+  delay(100);//give more time to read in logic analyzer
+
+
+
+}
+
 
 /**
 @brief on configures the wake,auto sleep, and measurement functionality of the adxl345.
@@ -328,12 +368,6 @@ void TOUCH_ISR(){
 }
 
 
- void toggleLED(){
-    digitalWrite(LED,HIGH);//turn LED on
-    delay(1000);//keep on for 1 second
-    digitalWrite(LED,LOW);//LED off
-}
-
 void setup() {
   /*
   Notes:
@@ -367,23 +401,7 @@ void setup() {
 
   //set thresh tap register, duration register
 
-  /*FreeRTOS setup*/
-  mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
-  ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
- 
-  //FreeRTOS tasks setup
 
-  //readAccel task
-  xTaskCreate(readAccel,//Function name
-    "Read Accel", //pcName
-    1024, //stack size
-    NULL, //currently not passing in any params
-    1, //top priority
-    NULL 
-  );
-
-  //Serial task
-  
 
   
 
@@ -419,11 +437,48 @@ void setup() {
   byte buff;
   readReg(ADXL345_TAP_AXES,1,&buff);
 
-  //TODO implement tap detection with interrupts
   //by default the interrupt register is set to all zeros so all interrupts will be sent to int1 pin.
 
-  //set 
+  /*FreeRTOS setup*/
+  mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
+  ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
+
+  accelQueue = xQueueCreate(10,sizeof(accelMsg));//create queue of length 10 for sending messages to serial task.
+ 
+  //FreeRTOS tasks setup
+
+  //readAccel task
+  xTaskCreate(readAccel,//Function name
+    "Read Accel", //pcName
+    2048, //stack size
+    NULL, //currently not passing in any params
+    1, //top priority
+    NULL 
+  );
+ 
+  //Serial task
+  xTaskCreate(sendSerial,
+    "Send Serial",
+    2048,
+    NULL,
+    1,
+    NULL
+  );
+
+  /* Note
+  These tasks may run in seperate cores since I did not pin them to specific cores.
+  */
   
+  //Interrupt led task(this used to be in the main loop of the program)
+  xTaskCreate(interruptLed,
+    "Interrupt Led",
+    2048,
+    NULL,
+    1,
+    NULL
+  );
+
+  //end of freeRTOS task setup
 
 }
 
@@ -431,27 +486,6 @@ void setup() {
 
 
 void loop() {
-
-
-  int x,y,z; //create integers to store the x, y, z data
-
-  //readAccel(&x,&y,&z);
-
-  byte tapActivity;
-
-  readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
-  //this should be read at the beginning to reset any tap activity, then at the end of isr to reset
-
-  ledMsg buff;//create buffer to read into for receiving
-  if(xQueueReceive(ledQueue,&buff,0) == pdTRUE){//if we get something in the queue
-    toggleLED();
-  }
-  
-
-
-  delay(100);//give more time to read in logic analyzer
-
-  
 
 }
 
