@@ -441,42 +441,24 @@ void setup() {
 
   /*FreeRTOS setup*/
   mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
-  ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
+  //ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
 
-  accelQueue = xQueueCreate(10,sizeof(accelMsg));//create queue of length 10 for sending messages to serial task.
+  //accelQueue = xQueueCreate(10,sizeof(accelMsg));//create queue of length 10 for sending messages to serial task.
  
   //FreeRTOS tasks setup
 
   //readAccel task
-  xTaskCreate(readAccel,//Function name
-    "Read Accel", //pcName
-    2048, //stack size
-    NULL, //currently not passing in any params
-    1, //top priority
-    NULL 
-  );
+
  
   //Serial task
-  xTaskCreate(sendSerial,
-    "Send Serial",
-    2048,
-    NULL,
-    1,
-    NULL
-  );
+
 
   /* Note
   These tasks may run in seperate cores since I did not pin them to specific cores.
   */
   
   //Interrupt led task(this used to be in the main loop of the program)
-  xTaskCreate(interruptLed,
-    "Interrupt Led",
-    2048,
-    NULL,
-    1,
-    NULL
-  );
+
 
   //end of freeRTOS task setup
 
