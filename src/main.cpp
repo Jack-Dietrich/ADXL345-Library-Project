@@ -39,6 +39,7 @@ ch3 - scl
 @param buff buffer to store the bytes that are being read
 */
  error_code_t readReg(byte reg, int numBytes, byte buff[]){
+ error_code_t readReg(byte reg, int numBytes, byte buff[]){
   
   if((buff == NULL) || (reg == NULL) || (numBytes == 0)){ //if we are given a null buffer/register to read from
     return ERR_CODE_INVALID_ARG;
