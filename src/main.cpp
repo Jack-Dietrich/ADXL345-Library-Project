@@ -3,10 +3,27 @@
 #include "errors.h"
 
 
+/*
+Pins on ESP32 Devkit V1
+MOSI: 23
+MISO: 19
+SCK: 18
+SS:5
+Interrupt pin for tap detection: D4(GPIO 4)
+Touch led on D2
+
+--Logic Analyzer channel info--
+ch0 - SS
+ch1 -miso/sdo
+ch2 - mosi/sda
+ch3 - scl
+*/
 
 
 
 
+
+//queues
 
 
 
@@ -22,8 +39,9 @@
 @param buff buffer to store the bytes that are being read
 */
  error_code_t readReg(byte reg, int numBytes, byte buff[]){
+ error_code_t readReg(byte reg, int numBytes, byte buff[]){
   
-  if(buff == NULL || reg == NULL || numBytes == 0){ //if we are given a null buffer/register to read from
+  if((buff == NULL) || (reg == NULL) || (numBytes == 0)){ //if we are given a null buffer/register to read from
     return ERR_CODE_INVALID_ARG;
   }
 
@@ -63,7 +81,6 @@
 
 @param reg the reg you want to write to
 @param buff a byte of data you would like to write to reg
-
 */
 error_code_t writeReg(byte reg, byte buff){
 
@@ -86,6 +103,7 @@ error_code_t writeReg(byte reg, byte buff){
 
 }
 
+//FREERTOS TASKS
 
 /**
 @brief read acceleration data from registers
@@ -93,7 +111,10 @@ error_code_t writeReg(byte reg, byte buff){
 @param x,y,z register you want to store x, y, z data in respectively
 
 */
-error_code_t readAccel(int *x, int *y, int *z){
+void readAccel(void * parameter){
+
+  int x,y,z = INT_MAX; //initialize the x,y,z variables as max to detect if we're not reading correctly
+
   byte buff[6]; //6 byte register to hold both x, y, z data (each coordinate has 2 registers)
 
   readReg(DATA_START,6,buff); //read 6 bytes into our buffer.
@@ -102,13 +123,59 @@ error_code_t readAccel(int *x, int *y, int *z){
   Here we are storing into the respective variables what we have read from the sensor. We are casting to ensure c++ does not choose incorrect data types. Buff[0] will be the first byte of our data, we then or it with the
   2nd byte stored in buff[1]. This needs to be shifted left 8 bits to align correctly to form the 16 bit value.
   */
-  *x = (int16_t)((((int)buff[1]) << 8) | buff[0]);
-	*y = (int16_t)((((int)buff[3]) << 8) | buff[2]);
-	*z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
+  x = (int16_t)((((int)buff[1]) << 8) | buff[0]);
+	y = (int16_t)((((int)buff[3]) << 8) | buff[2]);
+	z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
 
-  return ERR_CODE_SUCCESS;
 }
 
+
+/**
+@brief Send data to the serial port.
+
+*/
+void sendSerial(void * parameter){
+  accelMsg msg; //create accel message
+  if(xQueueReceive(accelQueue,&msg,0) == pdTRUE){//if we can recive something into the queue
+    Serial.print(msg.x + ",");
+    Serial.print(msg.y + ",");
+    Serial.print(msg.z);
+    Serial.println();
+  } 
+}
+
+
+
+void interruptLed(void * parameter){
+
+  int x,y,z; //create integers to store the x, y, z data
+
+  byte tapActivity;
+
+  readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
+  //this should be read at the beginning to reset any tap activity, then at the end of isr to reset
+
+  ledMsg buff;//create buffer to read into for receiving
+  if(xQueueReceive(ledQueue,&buff,0) == pdTRUE){//if we get something in the queue
+    digitalWrite(LED,HIGH);//turn LED on
+    delay(1000);//keep on for 1 second
+    digitalWrite(LED,LOW);//LED off
+  }
+  
+
+  delay(100);//give more time to read in logic analyzer
+
+
+
+}
+
+
+/**
+@brief on configures the wake,auto sleep, and measurement functionality of the adxl345.
+Most importantly the wake ensures that we are able to read data out of it. Without this, we could send commands
+but will not recieve data back.
+
+*/
 void on(){
 
   writeReg(ADXL345_POWER_CTL,0); //WAKE
@@ -116,6 +183,11 @@ void on(){
   writeReg(ADXL345_POWER_CTL,8);  //Mesure
 }
 
+
+/**
+@brief sets adxl345 to use SPI 4 wire instead of i2c.
+
+*/
 error_code_t setSPI(){
 
   //TODO: test this with setClearBit function
@@ -219,7 +291,12 @@ void setRange(int gRange){
 
 }
 
+/**
+@brief sets rate of the adxl345 data transmission
 
+@param rate desired speed (see datasheet)
+
+*/
 void setRate(int rate){
   byte buff;
 
@@ -273,11 +350,13 @@ void setRate(int rate){
   xSemaphoreGive(mutex);//give it back
 }
 
+/**
+@brief Interrupt service routine when the sensor has been tapped
 
+*/
 void TOUCH_ISR(){
   Serial.println("IN ISR");
 
-  //this may be interrupted by other processes(if in freeRTOS)
 
   ledMsg a;
 
@@ -289,12 +368,6 @@ void TOUCH_ISR(){
   //clearing interrupts is done through the main loop
 }
 
-
- void toggleLED(){
-    digitalWrite(LED,HIGH);//turn LED on
-    delay(1000);//keep on for 1 second
-    digitalWrite(LED,LOW);//LED off
-}
 
 void setup() {
   /*
@@ -329,10 +402,6 @@ void setup() {
 
   //set thresh tap register, duration register
 
-  /*FreeRTOS setup*/
-  mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
-  ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
- 
 
 
   
@@ -369,11 +438,30 @@ void setup() {
   byte buff;
   readReg(ADXL345_TAP_AXES,1,&buff);
 
-  //TODO implement tap detection with interrupts
   //by default the interrupt register is set to all zeros so all interrupts will be sent to int1 pin.
 
-  //set 
+  /*FreeRTOS setup*/
+  mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
+  //ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
+
+  //accelQueue = xQueueCreate(10,sizeof(accelMsg));//create queue of length 10 for sending messages to serial task.
+ 
+  //FreeRTOS tasks setup
+
+  //readAccel task
+
+ 
+  //Serial task
+
+
+  /* Note
+  These tasks may run in seperate cores since I did not pin them to specific cores.
+  */
   
+  //Interrupt led task(this used to be in the main loop of the program)
+
+
+  //end of freeRTOS task setup
 
 }
 
@@ -381,27 +469,6 @@ void setup() {
 
 
 void loop() {
-
-
-  int x,y,z; //create integers to store the x, y, z data
-
-  //readAccel(&x,&y,&z);
-
-  byte tapActivity;
-
-  readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
-  //this should be read at the beginning to reset any tap activity, then at the end of isr to reset
-
-  ledMsg buff;//create buffer to read into for receiving
-  if(xQueueReceive(ledQueue,&buff,0) == pdTRUE){//if we get something in the queue
-    toggleLED();
-  }
-  
-
-
-  delay(100);//give more time to read in logic analyzer
-
-  
 
 }
 

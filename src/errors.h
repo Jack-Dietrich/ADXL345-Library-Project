@@ -1,6 +1,9 @@
 #pragma once
 
-namespace adxl345 {
+
+#include <Arduino.h>
+#include <SPI.h>
+
 typedef enum { //define some errors as error_code_t
     /* Common Errors 0 - 99 */
     ERR_CODE_SUCCESS = 0,
@@ -96,14 +99,21 @@ static SemaphoreHandle_t mutex; //for the mutex when doing spi communication
 
 //queue
 static QueueHandle_t ledQueue;//queue to store led blink requests
+static QueueHandle_t accelQueue;//queue for acceleration messages
 
 
-///
 
 typedef struct ledMsg {
   int test;
 };
 
+
+//structure for passing acceleration after it's been read to the serial send task
+typedef struct accelMsg{
+  int x;
+  int y;
+  int z;
+};
 
 SPIClass vspi = SPIClass(VSPI);
 
@@ -117,5 +127,3 @@ error_code_t setClearBit(byte reg, int bitNum,int setClear);
 void setRange(int gRange);
 void setRate(int rate);
 void TOUCH_ISR();
-}
-

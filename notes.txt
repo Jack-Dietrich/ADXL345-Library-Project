@@ -21,8 +21,18 @@ Thurs July 4
 ------------
 -Added freertos queue in order to reduce time in ISR.
 
+Fri July 25
+-----------
+-Turning readAccel and Serial output into freertos tasks.
 
-Fri July 18 - implementing google test
-------------
--Need to select compiler before platformIO loads, else we get an error not being a ble to find project name
--added errors.h for defining some errors
+Mon July 28
+----------
+To decode backtrace:
+-Locate the tool in C:\Users\Username\.platformio\packages\toolchain-xtensa-esp32\bin
+-Also need the platformio ELF file which is located .pio\build\devkitname\firmware.elf
+-Navigate to commandline and cd to the directory the tool is located in, then run the following command with the following commnad:
+
+xtensa-esp32-elf-addr2line -aspCfire "path to elf file" (put backtrace here without the brackets)
+
+
+Backtrace: 0x4008353d:0x3ffb2060 0x400881d1:0x3ffb2080 0x4008d111:0x3ffb20a0 0x40088f31:0x3ffb21d0 0x400d158d:0x3ffb2210 0x400d15cd:0x3ffb2230 0x400d179a:0x3ffb2250 0x400d40a2:0x3ffb2290
