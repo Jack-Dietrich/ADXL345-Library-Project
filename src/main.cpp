@@ -39,9 +39,8 @@ ch3 - scl
 @param buff buffer to store the bytes that are being read
 */
  error_code_t readReg(byte reg, int numBytes, byte buff[]){
- error_code_t readReg(byte reg, int numBytes, byte buff[]){
   
-  if((buff == NULL) || (reg == NULL) || (numBytes == 0)){ //if we are given a null buffer/register to read from
+  if((buff == NULL)|| (numBytes == 0)){ //if we are given a null buffer/register to read from
     return ERR_CODE_INVALID_ARG;
   }
 
@@ -370,10 +369,16 @@ void TOUCH_ISR(){
 
 
 void setup() {
-  /*
-  Notes:
 
-  */
+  //FREERTOS setup
+  mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
+
+
+  ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
+
+
+  accelQueue = xQueueCreate(10,sizeof(accelMsg));//create queue of length 10 for sending messages to serial task.
+
 
   
   Serial.begin(115200);
@@ -401,10 +406,6 @@ void setup() {
   //end of interrupt setup
 
   //set thresh tap register, duration register
-
-
-
-  
 
 
   //setup of adxl345
@@ -441,11 +442,8 @@ void setup() {
   //by default the interrupt register is set to all zeros so all interrupts will be sent to int1 pin.
 
   /*FreeRTOS setup*/
-  mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
-  //ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
 
-  //accelQueue = xQueueCreate(10,sizeof(accelMsg));//create queue of length 10 for sending messages to serial task.
- 
+
   //FreeRTOS tasks setup
 
   //readAccel task

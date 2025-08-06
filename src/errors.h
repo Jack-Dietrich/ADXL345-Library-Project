@@ -103,13 +103,13 @@ static QueueHandle_t accelQueue;//queue for acceleration messages
 
 
 
-typedef struct ledMsg {
+struct ledMsg {
   int test;
 };
 
 
 //structure for passing acceleration after it's been read to the serial send task
-typedef struct accelMsg{
+ struct accelMsg{
   int x;
   int y;
   int z;
