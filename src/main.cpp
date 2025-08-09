@@ -120,9 +120,7 @@ error_code_t writeReg(byte reg, byte buff){
 */
 void readAccel(void *parameter){
 
-  xSemaphoreTake(printMutex,0);
   Serial.println("Accel Task Running");
-  xSemaphoreGive(printMutex);//give back mutex
 
   
   while(1){//infinite task loop
@@ -163,22 +161,18 @@ void readAccel(void *parameter){
 */
 void sendSerial(void * parameter){
 
-  xSemaphoreTake(printMutex,0);
   Serial.println("Serial Task Running");
-  xSemaphoreGive(printMutex);//give back mutex
 
 
   while(1){
   accelMsg msg; //create accel message
   if(xQueueReceive(accelQueue,&msg,0) == pdTRUE){//if we can recive something into the queue
-    xSemaphoreTake(printMutex,0);
     Serial.print(msg.x);
     Serial.print(",");
     Serial.print(msg.y);
     Serial.print(",");
     Serial.print(msg.z);
     Serial.println();
-    xSemaphoreGive(printMutex);//give back mutex
   } 
   }
 
@@ -188,22 +182,30 @@ void sendSerial(void * parameter){
 
 void interruptLed(void * parameter){
 
-  int x,y,z; //create integers to store the x, y, z data
+  while(1){
 
-  byte tapActivity;
+    int x,y,z; //create integers to store the x, y, z data
 
-  readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
-  //this should be read at the beginning to reset any tap activity, then at the end of isr to reset
 
-  ledMsg buff;//create buffer to read into for receiving
-  if(xQueueReceive(ledQueue,&buff,0) == pdTRUE){//if we get something in the queue
-    digitalWrite(LED,HIGH);//turn LED on
-    delay(1000);//keep on for 1 second
-    digitalWrite(LED,LOW);//LED off
+
+    byte tapActivity;
+
+    readReg(ADXL345_INT_SOURCE,1,&tapActivity); //if we read int source and only see anything it should mean there was a single tap as all other interrupts are disabled
+    //this should be read at the beginning to reset any tap activity, then at the end of isr to reset
+
+    ledMsg buff;//create buffer to read into for receiving
+    if(xQueueReceive(ledQueue,&buff,0) == pdTRUE){//if we get something in the queue
+      digitalWrite(LED,HIGH);//turn LED on
+      delay(1000);//keep on for 1 second(but let other tasks run)
+      digitalWrite(LED,LOW);//LED off
+    }
+    
+
+    delay(100);//give more time to read in logic analyzer
+
+
   }
-  
 
-  delay(100);//give more time to read in logic analyzer
 
 
 
@@ -266,16 +268,12 @@ error_code_t setClearBit(byte reg, int bitNum,int setClear){
   readReg(reg,1,buff);
 
   if(setClear){//we want to set bit
-    xSemaphoreTake(printMutex,0);
     Serial.println("Setting bit");
-    xSemaphoreGive(printMutex);//give back mutex
 
     buff[0] |= (1 << bitNum); //or with bit shifted (this was toggling before)
 
   }else{//we want to clear bit
-    xSemaphoreTake(printMutex,0);
     Serial.println("Clearing bit");
-    xSemaphoreGive(printMutex);//give back mutex
 
 
     buff[0] &= ~(1 << bitNum);
@@ -297,7 +295,6 @@ error_code_t setClearBit(byte reg, int bitNum,int setClear){
 void setRange(int gRange){
   //setting range from +-2g to +- 16g
 
-  xSemaphoreTake(printMutex,0);
   switch(gRange){
     case 2:
       Serial.println("Setting g range: 2g");
@@ -333,7 +330,6 @@ void setRange(int gRange){
       setClearBit(ADXL345_DATA_FORMAT,0,1);
       setClearBit(ADXL345_DATA_FORMAT,1,1);
   }
-  xSemaphoreGive(printMutex);//give back mutex
 
 
 }
@@ -402,7 +398,7 @@ void setRate(int rate){
 
 */
 void TOUCH_ISR(){
-  //removed print statement for touch isr
+  Serial.println("Interrupt Triggered");
 
   ledMsg a;
 
@@ -419,7 +415,6 @@ void setup() {
 
   //FREERTOS setup
   mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
-  printMutex = xSemaphoreCreateMutex();
 
   ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
 
@@ -489,9 +484,7 @@ void setup() {
   //by default the interrupt register is set to all zeros so all interrupts will be sent to int1 pin.
 
   /*FreeRTOS setup*/
-  xSemaphoreTake(printMutex,0);
   Serial.println("Now Setting up freeRTOS");
-  xSemaphoreGive(printMutex);//give back mutex
 
   //FreeRTOS tasks setup
 
@@ -499,7 +492,7 @@ void setup() {
 
   xTaskCreatePinnedToCore(readAccel,//Function name
     "ReadAccel", //pcName
-    8192, //stack size
+    1024, //stack size
     NULL, //currently not passing in any params
     1, //top priority
     NULL,
@@ -513,7 +506,16 @@ void setup() {
 
   xTaskCreate(sendSerial,
     "SendSerial",
-    2048,
+    1024,
+    NULL,
+    1,
+    NULL
+  );
+
+  //Interrupt hander task
+    xTaskCreate(interruptLed,
+    "interruptHandler",
+    1024,
     NULL,
     1,
     NULL
