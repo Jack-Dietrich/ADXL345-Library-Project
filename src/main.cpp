@@ -21,7 +21,15 @@ ch3 - scl
 
 
 
+#if CONFIG_FREERTOS_UNICORE  // this is just limiting the cpu to 1 core for debugging
 
+static const BaseType_t app_cpu = 0;
+
+#else
+
+static const BaseType_t app_cpu = 1;
+
+#endif
 
 //queues
 
@@ -110,7 +118,17 @@ error_code_t writeReg(byte reg, byte buff){
 @param x,y,z register you want to store x, y, z data in respectively
 
 */
-void readAccel(void * parameter){
+void readAccel(void *parameter){
+
+  while (true)
+  {
+    Serial.println("test");
+    vTaskDelay(100/portTICK_PERIOD_MS);
+  }
+  
+
+  /*
+  
 
   int x,y,z = INT_MAX; //initialize the x,y,z variables as max to detect if we're not reading correctly
 
@@ -122,9 +140,15 @@ void readAccel(void * parameter){
   Here we are storing into the respective variables what we have read from the sensor. We are casting to ensure c++ does not choose incorrect data types. Buff[0] will be the first byte of our data, we then or it with the
   2nd byte stored in buff[1]. This needs to be shifted left 8 bits to align correctly to form the 16 bit value.
   */
+
+  /*
   x = (int16_t)((((int)buff[1]) << 8) | buff[0]);
 	y = (int16_t)((((int)buff[3]) << 8) | buff[2]);
 	z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
+  */
+
+  
+
 
 }
 
@@ -443,13 +467,34 @@ void setup() {
 
   /*FreeRTOS setup*/
 
+  Serial.println("Now Setting up freeRTOS");
 
   //FreeRTOS tasks setup
 
   //readAccel task
 
+  xTaskCreatePinnedToCore(readAccel,//Function name
+    "ReadAccel", //pcName
+    4096, //stack size
+    NULL, //currently not passing in any params
+    1, //top priority
+    NULL,
+    app_cpu
+  );
+
+/*
+
  
   //Serial task
+
+  xTaskCreate(sendSerial,
+    "SendSerial",
+    2048,
+    NULL,
+    2,
+    NULL
+  );
+*/
 
 
   /* Note
@@ -458,6 +503,7 @@ void setup() {
   
   //Interrupt led task(this used to be in the main loop of the program)
 
+  vTaskDelete(NULL);//delete current task(setup)
 
   //end of freeRTOS task setup
 
