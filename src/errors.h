@@ -96,6 +96,7 @@ const int VSPI_SS = 5;
 
 //mutex
 static SemaphoreHandle_t mutex; //for the mutex when doing spi communication
+static SemaphoreHandle_t printMutex; //mutex for printing
 
 //queue
 static QueueHandle_t ledQueue;//queue to store led blink requests

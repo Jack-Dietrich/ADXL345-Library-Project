@@ -120,15 +120,12 @@ error_code_t writeReg(byte reg, byte buff){
 */
 void readAccel(void *parameter){
 
-  while (true)
-  {
-    Serial.println("test");
-    vTaskDelay(100/portTICK_PERIOD_MS);
-  }
-  
+  xSemaphoreTake(printMutex,0);
+  Serial.println("Accel Task Running");
+  xSemaphoreGive(printMutex);//give back mutex
 
-  /*
   
+  while(1){//infinite task loop
 
   int x,y,z = INT_MAX; //initialize the x,y,z variables as max to detect if we're not reading correctly
 
@@ -141,13 +138,20 @@ void readAccel(void *parameter){
   2nd byte stored in buff[1]. This needs to be shifted left 8 bits to align correctly to form the 16 bit value.
   */
 
-  /*
+  
   x = (int16_t)((((int)buff[1]) << 8) | buff[0]);
 	y = (int16_t)((((int)buff[3]) << 8) | buff[2]);
 	z = (int16_t)((((int)buff[5]) << 8) | buff[4]);
-  */
 
   
+  accelMsg msg;
+  msg.x=x;
+  msg.y=y;
+  msg.z=z;
+
+  xQueueSend(accelQueue,&msg,0);//send the msg to queue
+
+  }
 
 
 }
@@ -158,13 +162,26 @@ void readAccel(void *parameter){
 
 */
 void sendSerial(void * parameter){
+
+  xSemaphoreTake(printMutex,0);
+  Serial.println("Serial Task Running");
+  xSemaphoreGive(printMutex);//give back mutex
+
+
+  while(1){
   accelMsg msg; //create accel message
   if(xQueueReceive(accelQueue,&msg,0) == pdTRUE){//if we can recive something into the queue
-    Serial.print(msg.x + ",");
-    Serial.print(msg.y + ",");
+    xSemaphoreTake(printMutex,0);
+    Serial.print(msg.x);
+    Serial.print(",");
+    Serial.print(msg.y);
+    Serial.print(",");
     Serial.print(msg.z);
     Serial.println();
+    xSemaphoreGive(printMutex);//give back mutex
   } 
+  }
+
 }
 
 
@@ -249,12 +266,17 @@ error_code_t setClearBit(byte reg, int bitNum,int setClear){
   readReg(reg,1,buff);
 
   if(setClear){//we want to set bit
+    xSemaphoreTake(printMutex,0);
     Serial.println("Setting bit");
+    xSemaphoreGive(printMutex);//give back mutex
 
     buff[0] |= (1 << bitNum); //or with bit shifted (this was toggling before)
 
   }else{//we want to clear bit
+    xSemaphoreTake(printMutex,0);
     Serial.println("Clearing bit");
+    xSemaphoreGive(printMutex);//give back mutex
+
 
     buff[0] &= ~(1 << bitNum);
 
@@ -275,6 +297,7 @@ error_code_t setClearBit(byte reg, int bitNum,int setClear){
 void setRange(int gRange){
   //setting range from +-2g to +- 16g
 
+  xSemaphoreTake(printMutex,0);
   switch(gRange){
     case 2:
       Serial.println("Setting g range: 2g");
@@ -310,6 +333,7 @@ void setRange(int gRange){
       setClearBit(ADXL345_DATA_FORMAT,0,1);
       setClearBit(ADXL345_DATA_FORMAT,1,1);
   }
+  xSemaphoreGive(printMutex);//give back mutex
 
 
 }
@@ -378,8 +402,7 @@ void setRate(int rate){
 
 */
 void TOUCH_ISR(){
-  Serial.println("IN ISR");
-
+  //removed print statement for touch isr
 
   ledMsg a;
 
@@ -396,7 +419,7 @@ void setup() {
 
   //FREERTOS setup
   mutex = xSemaphoreCreateMutex(); //create mutex, assign to mutex handle
-
+  printMutex = xSemaphoreCreateMutex();
 
   ledQueue = xQueueCreate(10,sizeof(ledMsg));//arbitrarily size of 10 
 
@@ -466,8 +489,9 @@ void setup() {
   //by default the interrupt register is set to all zeros so all interrupts will be sent to int1 pin.
 
   /*FreeRTOS setup*/
-
+  xSemaphoreTake(printMutex,0);
   Serial.println("Now Setting up freeRTOS");
+  xSemaphoreGive(printMutex);//give back mutex
 
   //FreeRTOS tasks setup
 
@@ -475,14 +499,14 @@ void setup() {
 
   xTaskCreatePinnedToCore(readAccel,//Function name
     "ReadAccel", //pcName
-    4096, //stack size
+    8192, //stack size
     NULL, //currently not passing in any params
     1, //top priority
     NULL,
     app_cpu
   );
 
-/*
+
 
  
   //Serial task
@@ -491,10 +515,10 @@ void setup() {
     "SendSerial",
     2048,
     NULL,
-    2,
+    1,
     NULL
   );
-*/
+
 
 
   /* Note
