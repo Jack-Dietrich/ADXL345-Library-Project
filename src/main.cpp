@@ -60,7 +60,7 @@ static const BaseType_t app_cpu = 1;
   //SET READ 
   reg |= (1<<7); //set last bit so we read
 
-  xSemaphoreTake(mutex,0);//take mutex, don't block
+  xSemaphoreTake(mutex,portMAX_DELAY);//take mutex, block if needed
 
   digitalWrite(VSPI_SS,LOW);//start transmission
 
@@ -181,6 +181,8 @@ void sendSerial(void * parameter){
 
 
 void interruptLed(void * parameter){
+
+  Serial.println("Interrupt Task Running");
 
   while(1){
 
@@ -398,7 +400,6 @@ void setRate(int rate){
 
 */
 void TOUCH_ISR(){
-  Serial.println("Interrupt Triggered");
 
   ledMsg a;
 
@@ -512,13 +513,14 @@ void setup() {
     NULL
   );
 
-  //Interrupt hander task
-    xTaskCreate(interruptLed,
+  //Interrupt hander task, pin to core 1 so we can see when it causes a crash
+    xTaskCreatePinnedToCore(interruptLed,
     "interruptHandler",
-    1024,
+    4096,
     NULL,
     1,
-    NULL
+    NULL,
+    app_cpu
   );
 
 

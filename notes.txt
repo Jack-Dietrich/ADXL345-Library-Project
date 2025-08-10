@@ -30,7 +30,7 @@ Mon July 28
 To decode backtrace:
 -Locate the tool in C:\Users\Username\.platformio\packages\toolchain-xtensa-esp32\bin
 -Also need the platformio ELF file which is located .pio\build\devkitname\firmware.elf
--may need the absolute path for the elf file above
+-may need the absolute path for the elf file above(see file explorer)
 -Navigate to commandline and cd to the directory the tool is located in, then run the following command with the following commnad:
 
 .\xtensa-esp32-elf-addr2line -aspCfire ".pio\build\esp32doit-devkit-v1\firmware.elf"
